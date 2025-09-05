@@ -37,6 +37,56 @@
     </div>
 
     <script>
+      function calculateOptimalGrid() {
+        const grid = document.querySelector(".video-grid");
+        const videoCount = parseInt(grid.dataset.count) || 0;
+
+        if (videoCount === 0) return;
+
+        // Calculate grid dimensions
+        const columns = Math.ceil(Math.sqrt(videoCount * 1.77)); // 1.77 ≈ 16/9 aspect ratio
+        const rows = Math.ceil(videoCount / columns);
+
+        // Get available space
+        const header = document.querySelector("header");
+        const headerHeight = header.offsetHeight + 20; // 20px for margin
+        const availableHeight = window.innerHeight - headerHeight - 40; // 40px for padding
+        const availableWidth = grid.offsetWidth;
+
+        // Calculate video dimensions with aspect ratio 16:9
+        const maxVideoWidth = (availableWidth - (columns - 1) * 5) / columns; // 5px gap
+        const maxVideoHeight = (availableHeight - (rows - 1) * 5) / rows; // 5px gap
+
+        // Maintain 16:9 aspect ratio
+        let videoWidth, videoHeight;
+        if (maxVideoWidth / maxVideoHeight > 16 / 9) {
+          // Height is the limiting factor
+          videoHeight = maxVideoHeight;
+          videoWidth = videoHeight * (16 / 9);
+        } else {
+          // Width is the limiting factor
+          videoWidth = maxVideoWidth;
+          videoHeight = videoWidth * (9 / 16);
+        }
+
+        // Apply styles to all video items
+        const videoItems = document.querySelectorAll(".video-item");
+        videoItems.forEach((item) => {
+          item.style.width = `${videoWidth}px`;
+          item.style.height = `${videoHeight}px`;
+        });
+
+        // Update grid layout
+        grid.style.gridTemplateColumns = `repeat(${columns}, ${videoWidth}px)`;
+        grid.style.gridTemplateRows = `repeat(${rows}, ${videoHeight}px)`;
+      }
+
+      // Calculate on page load
+      calculateOptimalGrid();
+
+      // Recalculate on window resize
+      window.addEventListener("resize", calculateOptimalGrid);
+
       // Handle click on video to delete
       document.querySelectorAll(".video-item").forEach((item) => {
         item.addEventListener("click", async (e) => {
@@ -46,7 +96,7 @@
               method: "DELETE",
             });
             if (response.ok) {
-              // Remove the item from DOM instead of reloading
+              // Remove the item from DOM
               item.remove();
 
               // Update the count
@@ -63,6 +113,9 @@
                                     <a href="/record" class="btn-record">Record your first video</a>
                                 </div>
                             `;
+              } else {
+                // Recalculate grid
+                calculateOptimalGrid();
               }
             }
           }
