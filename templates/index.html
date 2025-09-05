@@ -37,32 +37,6 @@
     </div>
 
     <script>
-      // Dynamic grid sizing based on video count
-      function adjustGridLayout() {
-        const grid = document.querySelector(".video-grid");
-        const videoCount = parseInt(grid.dataset.count);
-
-        if (videoCount === 1) {
-          grid.style.gridTemplateColumns = "1fr";
-        } else if (videoCount === 2) {
-          grid.style.gridTemplateColumns = "repeat(2, 1fr)";
-        } else if (videoCount <= 4) {
-          grid.style.gridTemplateColumns = "repeat(2, 1fr)";
-        } else if (videoCount <= 6) {
-          grid.style.gridTemplateColumns = "repeat(3, 1fr)";
-        } else if (videoCount <= 9) {
-          grid.style.gridTemplateColumns = "repeat(3, 1fr)";
-        } else if (videoCount <= 12) {
-          grid.style.gridTemplateColumns = "repeat(4, 1fr)";
-        } else {
-          grid.style.gridTemplateColumns =
-            "repeat(auto-fill, minmax(250px, 1fr))";
-        }
-      }
-
-      // Apply layout on page load
-      adjustGridLayout();
-
       // Handle click on video to delete
       document.querySelectorAll(".video-item").forEach((item) => {
         item.addEventListener("click", async (e) => {
@@ -75,12 +49,11 @@
               // Remove the item from DOM instead of reloading
               item.remove();
 
-              // Update the count and re-adjust layout
+              // Update the count
               const grid = document.querySelector(".video-grid");
               const currentCount =
                 document.querySelectorAll(".video-item").length;
               grid.dataset.count = currentCount;
-              adjustGridLayout();
 
               // If no videos left, show the no-videos message
               if (currentCount === 0) {
