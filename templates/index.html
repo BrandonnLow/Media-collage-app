@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Grid</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>📹 Video Gallery</h1>
+        <a href="/record" class="btn-record">+ Record New Video</a>
+      </header>
+
+      <div class="video-grid" data-count="{{ videos|length }}">
+        {% if videos %} {% for video in videos %}
+        <div class="video-item" data-filename="{{ video }}">
+          <video autoplay muted loop playsinline>
+            <source
+              src="{{ url_for('static', filename='videos/' + video) }}"
+              type="video/webm"
+            />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+        {% endfor %} {% else %}
+        <div class="no-videos">
+          <p>No videos yet!</p>
+          <a href="/record" class="btn-record">Record your first video</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <script>
+      // Dynamic grid sizing based on video count
+      function adjustGridLayout() {
+        const grid = document.querySelector(".video-grid");
+        const videoCount = parseInt(grid.dataset.count);
+
+        if (videoCount === 1) {
+          grid.style.gridTemplateColumns = "1fr";
+        } else if (videoCount === 2) {
+          grid.style.gridTemplateColumns = "repeat(2, 1fr)";
+        } else if (videoCount <= 4) {
+          grid.style.gridTemplateColumns = "repeat(2, 1fr)";
+        } else if (videoCount <= 6) {
+          grid.style.gridTemplateColumns = "repeat(3, 1fr)";
+        } else if (videoCount <= 9) {
+          grid.style.gridTemplateColumns = "repeat(3, 1fr)";
+        } else if (videoCount <= 12) {
+          grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+        } else {
+          grid.style.gridTemplateColumns =
+            "repeat(auto-fill, minmax(250px, 1fr))";
+        }
+      }
+
+      // Apply layout on page load
+      adjustGridLayout();
+
+      // Handle click on video to delete
+      document.querySelectorAll(".video-item").forEach((item) => {
+        item.addEventListener("click", async (e) => {
+          if (confirm("Delete this video?")) {
+            const filename = item.dataset.filename;
+            const response = await fetch(`/delete/${filename}`, {
+              method: "DELETE",
+            });
+            if (response.ok) {
+              // Remove the item from DOM instead of reloading
+              item.remove();
+
+              // Update the count and re-adjust layout
+              const grid = document.querySelector(".video-grid");
+              const currentCount =
+                document.querySelectorAll(".video-item").length;
+              grid.dataset.count = currentCount;
+              adjustGridLayout();
+
+              // If no videos left, show the no-videos message
+              if (currentCount === 0) {
+                grid.innerHTML = `
+                                <div class="no-videos">
+                                    <p>No videos yet!</p>
+                                    <a href="/record" class="btn-record">Record your first video</a>
+                                </div>
+                            `;
+              }
+            }
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

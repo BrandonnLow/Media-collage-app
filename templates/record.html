@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Record Video</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🎬 Record Video</h1>
+        <a href="/" class="btn-back">← Back to Gallery</a>
+      </header>
+
+      <div class="recorder-container">
+        <video id="preview" autoplay muted></video>
+        <video id="recorded" controls style="display: none"></video>
+
+        <div class="controls">
+          <button id="startBtn" class="btn btn-start">
+            🔴 Start Recording
+          </button>
+          <button id="stopBtn" class="btn btn-stop" disabled>
+            ⏹️ Stop Recording
+          </button>
+          <button id="saveBtn" class="btn btn-save" style="display: none">
+            💾 Save & Upload
+          </button>
+          <button id="retryBtn" class="btn btn-retry" style="display: none">
+            🔄 Record Again
+          </button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div id="timer" class="timer">00:00</div>
+      </div>
+    </div>
+
+    <script>
+      let mediaRecorder;
+      let recordedChunks = [];
+      let stream;
+      let recordedBlob;
+      let timerInterval;
+      let seconds = 0;
+
+      const preview = document.getElementById("preview");
+      const recorded = document.getElementById("recorded");
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const retryBtn = document.getElementById("retryBtn");
+      const status = document.getElementById("status");
+      const timer = document.getElementById("timer");
+
+      // Initialize camera
+      async function initCamera() {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          preview.srcObject = stream;
+          status.textContent = "Camera ready!";
+          status.className = "status success";
+        } catch (err) {
+          status.textContent = "Camera access denied!";
+          status.className = "status error";
+          console.error("Error accessing camera:", err);
+        }
+      }
+
+      // Start recording
+      startBtn.addEventListener("click", () => {
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          recordedBlob = new Blob(recordedChunks, { type: "video/webm" });
+          recorded.src = URL.createObjectURL(recordedBlob);
+          preview.style.display = "none";
+          recorded.style.display = "block";
+
+          saveBtn.style.display = "inline-block";
+          retryBtn.style.display = "inline-block";
+          stopBtn.style.display = "none";
+          startBtn.style.display = "none";
+
+          clearInterval(timerInterval);
+        };
+
+        mediaRecorder.start();
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        status.textContent = "Recording...";
+        status.className = "status recording";
+
+        // Start timer
+        seconds = 0;
+        timerInterval = setInterval(() => {
+          seconds++;
+          const mins = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          timer.textContent = `${String(mins).padStart(2, "0")}:${String(
+            secs
+          ).padStart(2, "0")}`;
+        }, 1000);
+      });
+
+      // Stop recording
+      stopBtn.addEventListener("click", () => {
+        mediaRecorder.stop();
+        stopBtn.disabled = true;
+        startBtn.disabled = false;
+        status.textContent = "Recording stopped";
+        status.className = "status";
+      });
+
+      // Save and upload
+      saveBtn.addEventListener("click", async () => {
+        status.textContent = "Uploading...";
+        status.className = "status";
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const response = await fetch("/upload", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                video: reader.result,
+              }),
+            });
+
+            if (response.ok) {
+              status.textContent = "Upload successful! Redirecting...";
+              status.className = "status success";
+              setTimeout(() => {
+                window.location.href = "/";
+              }, 1500);
+            } else {
+              status.textContent = "Upload failed!";
+              status.className = "status error";
+            }
+          } catch (err) {
+            status.textContent = "Upload error!";
+            status.className = "status error";
+            console.error("Upload error:", err);
+          }
+        };
+        reader.readAsDataURL(recordedBlob);
+      });
+
+      // Retry recording
+      retryBtn.addEventListener("click", () => {
+        preview.style.display = "block";
+        recorded.style.display = "none";
+        saveBtn.style.display = "none";
+        retryBtn.style.display = "none";
+        startBtn.style.display = "inline-block";
+        stopBtn.style.display = "inline-block";
+        stopBtn.disabled = true;
+        startBtn.disabled = false;
+        timer.textContent = "00:00";
+        status.textContent = "Ready to record";
+        status.className = "status";
+      });
+
+      // Initialize on page load
+      initCamera();
+    </script>
+  </body>
+</html>
