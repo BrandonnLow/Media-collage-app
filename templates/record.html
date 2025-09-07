@@ -12,7 +12,14 @@
   <body>
     <div class="container">
       <header>
-        <h1>Record Video</h1>
+        <div class="header-left">
+          <img
+            src="{{ url_for('static', filename='images/logo.png') }}"
+            alt="Logo"
+            class="logo"
+          />
+          <h1>Record Video</h1>
+        </div>
         <a href="/" class="btn-back">← Back to Gallery</a>
       </header>
 
@@ -23,7 +30,7 @@
         <div class="controls">
           <button id="startBtn" class="btn btn-start">Start Recording</button>
           <button id="stopBtn" class="btn btn-stop" disabled>
-            ⏹Stop Recording
+            ⏹ Stop Recording
           </button>
           <button id="saveBtn" class="btn btn-save" style="display: none">
             Save & Upload
@@ -75,7 +82,16 @@
       // Start recording
       startBtn.addEventListener("click", () => {
         recordedChunks = [];
-        mediaRecorder = new MediaRecorder(stream);
+
+        // Try to use a codec that produces better compatibility
+        const options = { mimeType: "video/webm;codecs=vp8,opus" };
+
+        try {
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e) {
+          // Fallback to default if the codec is not supported
+          mediaRecorder = new MediaRecorder(stream);
+        }
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
@@ -142,14 +158,22 @@
               }),
             });
 
+            const result = await response.json();
+
             if (response.ok) {
-              status.textContent = "Upload successful! Redirecting...";
-              status.className = "status success";
+              if (result.warning) {
+                status.textContent = result.warning + " Redirecting...";
+                status.className = "status warning";
+              } else {
+                status.textContent = "Upload successful! Redirecting...";
+                status.className = "status success";
+              }
               setTimeout(() => {
                 window.location.href = "/";
               }, 1500);
             } else {
-              status.textContent = "Upload failed!";
+              status.textContent =
+                "Upload failed: " + (result.error || "Unknown error");
               status.className = "status error";
             }
           } catch (err) {
