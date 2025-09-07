@@ -43,56 +43,106 @@
 
         if (videoCount === 0) return;
 
-        // Calculate grid dimensions
-        const columns = Math.ceil(Math.sqrt(videoCount * 1.77)); // 1.77 ≈ 16/9 aspect ratio
-        const rows = Math.ceil(videoCount / columns);
-
-        // Get available space
+        // Get the header height
         const header = document.querySelector("header");
-        const headerHeight = header.offsetHeight + 20; // 20px for margin
-        const availableHeight = window.innerHeight - headerHeight - 40; // 40px for padding
-        const availableWidth = grid.offsetWidth;
+        const headerHeight = header.offsetHeight;
 
-        // Calculate video dimensions with aspect ratio 16:9
-        const maxVideoWidth = (availableWidth - (columns - 1) * 5) / columns; // 5px gap
-        const maxVideoHeight = (availableHeight - (rows - 1) * 5) / rows; // 5px gap
+        // Calculate available space (full viewport minus header and small padding)
+        const padding = 10; // Total padding (5px top/bottom)
+        const gap = 5; // Gap between header and grid
+        const availableHeight =
+          window.innerHeight - headerHeight - padding - gap;
+        const availableWidth = window.innerWidth - padding;
 
-        // Maintain 16:9 aspect ratio
-        let videoWidth, videoHeight;
-        if (maxVideoWidth / maxVideoHeight > 16 / 9) {
-          // Height is the limiting factor
-          videoHeight = maxVideoHeight;
-          videoWidth = videoHeight * (16 / 9);
-        } else {
-          // Width is the limiting factor
-          videoWidth = maxVideoWidth;
-          videoHeight = videoWidth * (9 / 16);
+        // Find the best grid layout that uses maximum space
+        let bestLayout = null;
+        let maxVideoArea = 0;
+
+        // Try different column/row combinations
+        for (let cols = 1; cols <= videoCount; cols++) {
+          const rows = Math.ceil(videoCount / cols);
+
+          // Calculate video size for this layout (accounting for gaps)
+          const videoGap = 3;
+          const totalGapWidth = (cols - 1) * videoGap;
+          const totalGapHeight = (rows - 1) * videoGap;
+
+          const maxVideoWidth = (availableWidth - totalGapWidth) / cols;
+          const maxVideoHeight = (availableHeight - totalGapHeight) / rows;
+
+          // Apply 16:9 aspect ratio constraint
+          let videoWidth, videoHeight;
+          const targetRatio = 16 / 9;
+
+          if (maxVideoWidth / maxVideoHeight > targetRatio) {
+            // Height is limiting
+            videoHeight = maxVideoHeight;
+            videoWidth = videoHeight * targetRatio;
+          } else {
+            // Width is limiting
+            videoWidth = maxVideoWidth;
+            videoHeight = videoWidth / targetRatio;
+          }
+
+          // Ensure videos fit in available space
+          if (
+            videoWidth * cols + totalGapWidth <= availableWidth &&
+            videoHeight * rows + totalGapHeight <= availableHeight
+          ) {
+            const area = videoWidth * videoHeight;
+            if (area > maxVideoArea) {
+              maxVideoArea = area;
+              bestLayout = {
+                cols: cols,
+                rows: rows,
+                width: videoWidth,
+                height: videoHeight,
+                totalWidth: videoWidth * cols + totalGapWidth,
+                totalHeight: videoHeight * rows + totalGapHeight,
+              };
+            }
+          }
         }
 
-        // Apply styles to all video items
-        const videoItems = document.querySelectorAll(".video-item");
-        videoItems.forEach((item) => {
-          item.style.width = `${videoWidth}px`;
-          item.style.height = `${videoHeight}px`;
-        });
+        // Apply the best layout
+        if (bestLayout) {
+          // Set fixed dimensions for all video items
+          const videoItems = document.querySelectorAll(".video-item");
+          videoItems.forEach((item) => {
+            item.style.width = `${bestLayout.width}px`;
+            item.style.height = `${bestLayout.height}px`;
+          });
 
-        // Update grid layout
-        grid.style.gridTemplateColumns = `repeat(${columns}, ${videoWidth}px)`;
-        grid.style.gridTemplateRows = `repeat(${rows}, ${videoHeight}px)`;
+          // Configure the grid
+          grid.style.gridTemplateColumns = `repeat(${bestLayout.cols}, ${bestLayout.width}px)`;
+          grid.style.gridTemplateRows = `repeat(${bestLayout.rows}, ${bestLayout.height}px)`;
+          grid.style.width = `${bestLayout.totalWidth}px`;
+          grid.style.height = `${bestLayout.totalHeight}px`;
+
+          // Center the grid in available space
+          grid.style.margin = "auto";
+          grid.style.display = "grid";
+        }
       }
 
-      // Calculate on page load
-      calculateOptimalGrid();
+      // Initial calculation with small delay to ensure DOM is ready
+      setTimeout(calculateOptimalGrid, 50);
 
       // Recalculate on window resize
-      window.addEventListener("resize", calculateOptimalGrid);
+      let resizeTimeout;
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(calculateOptimalGrid, 100);
+      });
 
       // Handle click on video to delete
       document.querySelectorAll(".video-item").forEach((item) => {
         item.addEventListener("click", async (e) => {
           if (confirm("Delete this video?")) {
             const filename = item.dataset.filename;
-            const response = await fetch(`/delete/${filename}`, {
+            // Properly encode the filename for the URL
+            const encodedFilename = encodeURIComponent(filename);
+            const response = await fetch(`/delete/${encodedFilename}`, {
               method: "DELETE",
             });
             if (response.ok) {
@@ -114,9 +164,15 @@
                                 </div>
                             `;
               } else {
-                // Recalculate grid
-                calculateOptimalGrid();
+                // Recalculate grid immediately
+                setTimeout(calculateOptimalGrid, 50);
               }
+            } else {
+              // Show error if delete failed
+              const error = await response.json();
+              alert(
+                `Failed to delete video: ${error.error || "Unknown error"}`
+              );
             }
           }
         });

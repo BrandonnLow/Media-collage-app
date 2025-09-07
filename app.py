@@ -3,6 +3,7 @@ import os
 from werkzeug.utils import secure_filename
 import base64
 from datetime import datetime
+from urllib.parse import unquote
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
@@ -16,16 +17,16 @@ def index():
     """Grid view - Display all videos"""
     videos = []
     video_folder = app.config['UPLOAD_FOLDER']
-    
+
     # Get all video files
     if os.path.exists(video_folder):
         for filename in os.listdir(video_folder):
             if filename.endswith(('.mp4', '.webm', '.ogg')):
                 videos.append(filename)
-    
+
     # Sort by modification time (newest first)
     videos.sort(key=lambda x: os.path.getmtime(os.path.join(video_folder, x)), reverse=True)
-    
+
     return render_template('index.html', videos=videos)
 
 @app.route('/record')
@@ -39,35 +40,48 @@ def upload_video():
     try:
         data = request.json
         video_data = data['video']
-        
+
         # Remove the data URL prefix
         video_data = video_data.split(',')[1]
-        
+
         # Decode base64
         video_binary = base64.b64decode(video_data)
-        
+
         # Generate unique filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'video_{timestamp}.webm'
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
+
         # Save the file
         with open(filepath, 'wb') as f:
             f.write(video_binary)
-        
+
         return jsonify({'success': True, 'filename': filename})
-    
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/delete/<filename>', methods=['DELETE'])
+@app.route('/delete/<path:filename>', methods=['DELETE'])
 def delete_video(filename):
     """Delete a video file"""
     try:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename))
+        # URL decode the filename to handle spaces and special characters
+        filename = unquote(filename)
+        
+        # Construct the filepath
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Check if file exists and delete it
         if os.path.exists(filepath):
             os.remove(filepath)
             return jsonify({'success': True})
+        
+        # If not found, try with secure_filename (for backwards compatibility)
+        secure_filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename))
+        if os.path.exists(secure_filepath):
+            os.remove(secure_filepath)
+            return jsonify({'success': True})
+            
         return jsonify({'success': False, 'error': 'File not found'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
