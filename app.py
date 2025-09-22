@@ -6,10 +6,12 @@ from datetime import datetime
 from urllib.parse import unquote
 import subprocess
 import tempfile
+import math
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 app.config['UPLOAD_FOLDER'] = 'static/videos'
+app.config['VIDEOS_PER_PAGE'] = 30  # Configure videos per page limit here
 
 # Create necessary folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -31,14 +33,14 @@ def convert_webm_to_mp4(webm_path, mp4_path):
             '-y',  # Overwrite output file
             mp4_path  # Output file
         ]
-        
+
         # Run ffmpeg
         result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         if result.returncode != 0:
             print(f"FFmpeg error: {result.stderr}")
             return False
-            
+
         return True
     except Exception as e:
         print(f"Conversion error: {str(e)}")
@@ -46,11 +48,15 @@ def convert_webm_to_mp4(webm_path, mp4_path):
 
 @app.route('/')
 def index():
-    """Grid view - Display all videos"""
+    """Grid view - Display videos with pagination"""
+    # Get page number from query parameter, default to 1
+    page = request.args.get('page', 1, type=int)
+    videos_per_page = app.config['VIDEOS_PER_PAGE']
+    
     videos = []
     video_folder = app.config['UPLOAD_FOLDER']
 
-    # Get all video files (now looking for MP4 files)
+    # Get all video files
     if os.path.exists(video_folder):
         for filename in os.listdir(video_folder):
             if filename.endswith(('.mp4', '.webm', '.ogg')):
@@ -58,8 +64,39 @@ def index():
 
     # Sort by modification time (newest first)
     videos.sort(key=lambda x: os.path.getmtime(os.path.join(video_folder, x)), reverse=True)
+    
+    # Calculate pagination
+    total_videos = len(videos)
+    total_pages = math.ceil(total_videos / videos_per_page) if total_videos > 0 else 1
+    
+    # Ensure page is within valid range
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+    
+    # Get videos for current page
+    start_idx = (page - 1) * videos_per_page
+    end_idx = start_idx + videos_per_page
+    page_videos = videos[start_idx:end_idx]
+    
+    # Prepare pagination info
+    pagination_info = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': page - 1 if page > 1 else None,
+        'next_page': page + 1 if page < total_pages else None,
+        'total_videos': total_videos,
+        'videos_per_page': videos_per_page,
+        'start_idx': start_idx + 1 if total_videos > 0 else 0,
+        'end_idx': min(end_idx, total_videos)
+    }
 
-    return render_template('index.html', videos=videos)
+    return render_template('index.html', 
+                         videos=page_videos, 
+                         pagination=pagination_info)
 
 @app.route('/record')
 def record():
@@ -82,11 +119,11 @@ def upload_video():
 
         # Generate unique filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
+
         # Create a temporary WebM file
         temp_webm_fd, temp_webm_path = tempfile.mkstemp(suffix='.webm')
         os.close(temp_webm_fd)  # Close the file descriptor
-        
+
         # Save the WebM file temporarily
         with open(temp_webm_path, 'wb') as f:
             f.write(video_binary)
@@ -100,22 +137,22 @@ def upload_video():
             # Clean up temporary WebM file
             if os.path.exists(temp_webm_path):
                 os.remove(temp_webm_path)
-            
+
             return jsonify({'success': True, 'filename': mp4_filename})
         else:
             # If conversion fails, save as WebM as fallback
             webm_filename = f'video_{timestamp}.webm'
             webm_filepath = os.path.join(app.config['UPLOAD_FOLDER'], webm_filename)
-            
+
             with open(webm_filepath, 'wb') as f:
                 f.write(video_binary)
-            
+
             # Clean up temporary file
             if os.path.exists(temp_webm_path):
                 os.remove(temp_webm_path)
-                
+
             return jsonify({
-                'success': True, 
+                'success': True,
                 'filename': webm_filename,
                 'warning': 'MP4 conversion failed, saved as WebM'
             })

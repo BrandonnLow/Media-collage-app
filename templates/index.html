@@ -29,6 +29,21 @@
         <a href="/record" class="btn-record">+ Record New Video</a>
       </header>
 
+      <!-- Pagination Info Display -->
+      {% if pagination.total_videos > 0 %}
+      <div class="pagination-info">
+        <span
+          >Page {{ pagination.current_page }} of {{ pagination.total_pages
+          }}</span
+        >
+        <span class="separator">|</span>
+        <span
+          >Videos {{ pagination.start_idx }}-{{ pagination.end_idx }} of {{
+          pagination.total_videos }}</span
+        >
+      </div>
+      {% endif %}
+
       <div class="video-grid" data-count="{{ videos|length }}">
         {% if videos %} {% for video in videos %}
         <div class="video-item" data-filename="{{ video }}">
@@ -40,14 +55,78 @@
             Your browser does not support the video tag.
           </video>
         </div>
-        {% endfor %} {% else %}
+        {% endfor %} {% else %} {% if pagination.current_page > 1 %}
+        <!-- Empty page (not the first page) -->
+        <div class="no-videos">
+          <p>No videos on this page</p>
+          <a href="/?page=1" class="btn-record">← Back to first page</a>
+        </div>
+        {% else %}
+        <!-- No videos at all -->
         <div class="no-videos">
           <p>No videos yet!</p>
           <a href="/record" class="btn-record">Record your first video</a>
         </div>
-        {% endif %}
+        {% endif %} {% endif %}
       </div>
     </div>
+
+    <!-- Navigation Arrows -->
+    {% if pagination.total_pages > 1 %}
+    <nav class="page-navigation">
+      {% if pagination.has_prev %}
+      <a
+        href="/?page={{ pagination.prev_page }}"
+        class="nav-arrow nav-prev"
+        title="Previous Page"
+      >
+        <div class="arrow-container">
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M15 18L9 12L15 6"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="page-label">Page {{ pagination.prev_page }}</span>
+        </div>
+      </a>
+      {% endif %} {% if pagination.has_next %}
+      <a
+        href="/?page={{ pagination.next_page }}"
+        class="nav-arrow nav-next"
+        title="Next Page"
+      >
+        <div class="arrow-container">
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M9 18L15 12L9 6"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="page-label">Page {{ pagination.next_page }}</span>
+        </div>
+      </a>
+      {% endif %}
+    </nav>
+    {% endif %}
 
     <script>
       function calculateOptimalGrid() {
@@ -56,26 +135,32 @@
 
         if (videoCount === 0) return;
 
-        // Get the header height
+        // Get the header height and pagination info height
         const header = document.querySelector("header");
+        const paginationInfo = document.querySelector(".pagination-info");
         const headerHeight = header.offsetHeight;
+        const paginationHeight = paginationInfo
+          ? paginationInfo.offsetHeight
+          : 0;
 
-        // Calculate available space (full viewport minus header and small padding)
-        const padding = 10; // Total padding (5px top/bottom)
-        const gap = 5; // Gap between header and grid
+        // Calculate available space
+        const padding = 10;
+        const gap = 5;
         const availableHeight =
-          window.innerHeight - headerHeight - padding - gap;
+          window.innerHeight -
+          headerHeight -
+          paginationHeight -
+          padding -
+          gap * 2;
         const availableWidth = window.innerWidth - padding;
 
-        // Find the best grid layout that uses maximum space
+        // Find the best grid layout
         let bestLayout = null;
         let maxVideoArea = 0;
 
-        // Try different column/row combinations
         for (let cols = 1; cols <= videoCount; cols++) {
           const rows = Math.ceil(videoCount / cols);
 
-          // Calculate video size for this layout (accounting for gaps)
           const videoGap = 3;
           const totalGapWidth = (cols - 1) * videoGap;
           const totalGapHeight = (rows - 1) * videoGap;
@@ -83,21 +168,17 @@
           const maxVideoWidth = (availableWidth - totalGapWidth) / cols;
           const maxVideoHeight = (availableHeight - totalGapHeight) / rows;
 
-          // Apply 16:9 aspect ratio constraint
           let videoWidth, videoHeight;
           const targetRatio = 16 / 9;
 
           if (maxVideoWidth / maxVideoHeight > targetRatio) {
-            // Height is limiting
             videoHeight = maxVideoHeight;
             videoWidth = videoHeight * targetRatio;
           } else {
-            // Width is limiting
             videoWidth = maxVideoWidth;
             videoHeight = videoWidth / targetRatio;
           }
 
-          // Ensure videos fit in available space
           if (
             videoWidth * cols + totalGapWidth <= availableWidth &&
             videoHeight * rows + totalGapHeight <= availableHeight
@@ -117,28 +198,23 @@
           }
         }
 
-        // Apply the best layout
         if (bestLayout) {
-          // Set fixed dimensions for all video items
           const videoItems = document.querySelectorAll(".video-item");
           videoItems.forEach((item) => {
             item.style.width = `${bestLayout.width}px`;
             item.style.height = `${bestLayout.height}px`;
           });
 
-          // Configure the grid
           grid.style.gridTemplateColumns = `repeat(${bestLayout.cols}, ${bestLayout.width}px)`;
           grid.style.gridTemplateRows = `repeat(${bestLayout.rows}, ${bestLayout.height}px)`;
           grid.style.width = `${bestLayout.totalWidth}px`;
           grid.style.height = `${bestLayout.totalHeight}px`;
-
-          // Center the grid in available space
           grid.style.margin = "auto";
           grid.style.display = "grid";
         }
       }
 
-      // Initial calculation with small delay to ensure DOM is ready
+      // Initial calculation
       setTimeout(calculateOptimalGrid, 50);
 
       // Recalculate on window resize
@@ -153,35 +229,18 @@
         item.addEventListener("click", async (e) => {
           if (confirm("Delete this video?")) {
             const filename = item.dataset.filename;
-            // Properly encode the filename for the URL
             const encodedFilename = encodeURIComponent(filename);
             const response = await fetch(`/delete/${encodedFilename}`, {
               method: "DELETE",
             });
             if (response.ok) {
-              // Remove the item from DOM
-              item.remove();
+              // Get current page from URL
+              const urlParams = new URLSearchParams(window.location.search);
+              const currentPage = urlParams.get("page") || "1";
 
-              // Update the count
-              const grid = document.querySelector(".video-grid");
-              const currentCount =
-                document.querySelectorAll(".video-item").length;
-              grid.dataset.count = currentCount;
-
-              // If no videos left, show the no-videos message
-              if (currentCount === 0) {
-                grid.innerHTML = `
-                                <div class="no-videos">
-                                    <p>No videos yet!</p>
-                                    <a href="/record" class="btn-record">Record your first video</a>
-                                </div>
-                            `;
-              } else {
-                // Recalculate grid immediately
-                setTimeout(calculateOptimalGrid, 50);
-              }
+              // Reload the current page to refresh the video list
+              window.location.href = `/?page=${currentPage}`;
             } else {
-              // Show error if delete failed
               const error = await response.json();
               alert(
                 `Failed to delete video: ${error.error || "Unknown error"}`
@@ -189,6 +248,21 @@
             }
           }
         });
+      });
+
+      // Keyboard navigation support
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft") {
+          const prevArrow = document.querySelector(".nav-prev");
+          if (prevArrow) {
+            prevArrow.click();
+          }
+        } else if (e.key === "ArrowRight") {
+          const nextArrow = document.querySelector(".nav-next");
+          if (nextArrow) {
+            nextArrow.click();
+          }
+        }
       });
     </script>
   </body>
