@@ -25,12 +25,12 @@
             class="logo"
           />
         </div>
-        <h1 class="time-capsule-title">Our Time Capsule</h1>
-        <a href="/record" class="btn-record">+ Record New Video</a>
+        <h1 class="time-capsule-title">Tembusu UTCP Graduation</h1>
+        <a href="/record" class="btn-record">+ Capture Moments</a>
       </header>
 
       <!-- Pagination Info Display -->
-      {% if pagination.total_videos > 0 %}
+      {% if pagination.total_media > 0 %}
       <div class="pagination-info">
         <span
           >Page {{ pagination.current_page }} of {{ pagination.total_pages
@@ -38,34 +38,46 @@
         >
         <span class="separator">|</span>
         <span
-          >Videos {{ pagination.start_idx }}-{{ pagination.end_idx }} of {{
-          pagination.total_videos }}</span
+          >Items {{ pagination.start_idx }}-{{ pagination.end_idx }} of {{
+          pagination.total_media }}</span
         >
       </div>
       {% endif %}
 
-      <div class="video-grid" data-count="{{ videos|length }}">
-        {% if videos %} {% for video in videos %}
-        <div class="video-item" data-filename="{{ video }}">
+      <div class="media-grid" data-count="{{ media_files|length }}">
+        {% if media_files %} {% for item in media_files %}
+        <div
+          class="media-item"
+          data-filename="{{ item.filename }}"
+          data-type="{{ item.type }}"
+        >
+          {% if item.type == 'video' %}
           <video autoplay muted loop playsinline>
             <source
-              src="{{ url_for('static', filename='videos/' + video) }}"
+              src="{{ url_for('static', filename='videos/' + item.filename) }}"
               type="video/mp4"
             />
             Your browser does not support the video tag.
           </video>
+          {% else %}
+          <img
+            src="{{ url_for('static', filename='videos/' + item.filename) }}"
+            alt="Photo"
+            loading="lazy"
+          />
+          {% endif %}
         </div>
         {% endfor %} {% else %} {% if pagination.current_page > 1 %}
         <!-- Empty page (not the first page) -->
-        <div class="no-videos">
-          <p>No videos on this page</p>
+        <div class="no-media">
+          <p>No items on this page</p>
           <a href="/?page=1" class="btn-record">← Back to first page</a>
         </div>
         {% else %}
-        <!-- No videos at all -->
-        <div class="no-videos">
-          <p>No videos yet!</p>
-          <a href="/record" class="btn-record">Record your first video</a>
+        <!-- No media at all -->
+        <div class="no-media">
+          <p>No memories yet!</p>
+          <a href="/record" class="btn-record">Capture your first moment</a>
         </div>
         {% endif %} {% endif %}
       </div>
@@ -130,10 +142,10 @@
 
     <script>
       function calculateOptimalGrid() {
-        const grid = document.querySelector(".video-grid");
-        const videoCount = parseInt(grid.dataset.count) || 0;
+        const grid = document.querySelector(".media-grid");
+        const mediaCount = parseInt(grid.dataset.count) || 0;
 
-        if (videoCount === 0) return;
+        if (mediaCount === 0) return;
 
         // Get the header height and pagination info height
         const header = document.querySelector("header");
@@ -156,51 +168,51 @@
 
         // Find the best grid layout
         let bestLayout = null;
-        let maxVideoArea = 0;
+        let maxItemArea = 0;
 
-        for (let cols = 1; cols <= videoCount; cols++) {
-          const rows = Math.ceil(videoCount / cols);
+        for (let cols = 1; cols <= mediaCount; cols++) {
+          const rows = Math.ceil(mediaCount / cols);
 
-          const videoGap = 3;
-          const totalGapWidth = (cols - 1) * videoGap;
-          const totalGapHeight = (rows - 1) * videoGap;
+          const itemGap = 3;
+          const totalGapWidth = (cols - 1) * itemGap;
+          const totalGapHeight = (rows - 1) * itemGap;
 
-          const maxVideoWidth = (availableWidth - totalGapWidth) / cols;
-          const maxVideoHeight = (availableHeight - totalGapHeight) / rows;
+          const maxItemWidth = (availableWidth - totalGapWidth) / cols;
+          const maxItemHeight = (availableHeight - totalGapHeight) / rows;
 
-          let videoWidth, videoHeight;
+          let itemWidth, itemHeight;
           const targetRatio = 16 / 9;
 
-          if (maxVideoWidth / maxVideoHeight > targetRatio) {
-            videoHeight = maxVideoHeight;
-            videoWidth = videoHeight * targetRatio;
+          if (maxItemWidth / maxItemHeight > targetRatio) {
+            itemHeight = maxItemHeight;
+            itemWidth = itemHeight * targetRatio;
           } else {
-            videoWidth = maxVideoWidth;
-            videoHeight = videoWidth / targetRatio;
+            itemWidth = maxItemWidth;
+            itemHeight = itemWidth / targetRatio;
           }
 
           if (
-            videoWidth * cols + totalGapWidth <= availableWidth &&
-            videoHeight * rows + totalGapHeight <= availableHeight
+            itemWidth * cols + totalGapWidth <= availableWidth &&
+            itemHeight * rows + totalGapHeight <= availableHeight
           ) {
-            const area = videoWidth * videoHeight;
-            if (area > maxVideoArea) {
-              maxVideoArea = area;
+            const area = itemWidth * itemHeight;
+            if (area > maxItemArea) {
+              maxItemArea = area;
               bestLayout = {
                 cols: cols,
                 rows: rows,
-                width: videoWidth,
-                height: videoHeight,
-                totalWidth: videoWidth * cols + totalGapWidth,
-                totalHeight: videoHeight * rows + totalGapHeight,
+                width: itemWidth,
+                height: itemHeight,
+                totalWidth: itemWidth * cols + totalGapWidth,
+                totalHeight: itemHeight * rows + totalGapHeight,
               };
             }
           }
         }
 
         if (bestLayout) {
-          const videoItems = document.querySelectorAll(".video-item");
-          videoItems.forEach((item) => {
+          const mediaItems = document.querySelectorAll(".media-item");
+          mediaItems.forEach((item) => {
             item.style.width = `${bestLayout.width}px`;
             item.style.height = `${bestLayout.height}px`;
           });
@@ -224,10 +236,13 @@
         resizeTimeout = setTimeout(calculateOptimalGrid, 100);
       });
 
-      // Handle click on video to delete
-      document.querySelectorAll(".video-item").forEach((item) => {
+      // Handle click on media item to delete
+      document.querySelectorAll(".media-item").forEach((item) => {
         item.addEventListener("click", async (e) => {
-          if (confirm("Delete this video?")) {
+          const type = item.dataset.type;
+          const typeText = type === "video" ? "video" : "photo";
+
+          if (confirm(`Delete this ${typeText}?`)) {
             const filename = item.dataset.filename;
             const encodedFilename = encodeURIComponent(filename);
             const response = await fetch(`/delete/${encodedFilename}`, {
@@ -238,12 +253,14 @@
               const urlParams = new URLSearchParams(window.location.search);
               const currentPage = urlParams.get("page") || "1";
 
-              // Reload the current page to refresh the video list
+              // Reload the current page to refresh the media list
               window.location.href = `/?page=${currentPage}`;
             } else {
               const error = await response.json();
               alert(
-                `Failed to delete video: ${error.error || "Unknown error"}`
+                `Failed to delete ${typeText}: ${
+                  error.error || "Unknown error"
+                }`
               );
             }
           }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Record Video</title>
+    <title>Capture Moments</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
@@ -18,30 +18,61 @@
             alt="Logo"
             class="logo"
           />
-          <h1 class="time-capsule-title">Record Video</h1>
+          <h1 class="time-capsule-title">Capture Moments</h1>
         </div>
         <a href="/" class="btn-back">← Back to Gallery</a>
       </header>
 
       <div class="recorder-container">
-        <video id="preview" autoplay muted></video>
-        <video id="recorded" controls style="display: none"></video>
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+          <button id="photoModeBtn" class="mode-btn active">📷 Photo</button>
+          <button id="videoModeBtn" class="mode-btn">🎬 Video</button>
+        </div>
 
-        <div class="controls">
-          <button id="startBtn" class="btn btn-start">Start Recording</button>
+        <!-- Camera Preview -->
+        <div class="camera-container">
+          <video id="preview" autoplay muted></video>
+          <video id="recorded" controls style="display: none"></video>
+          <img id="capturedPhoto" style="display: none" />
+          <canvas id="photoCanvas" style="display: none"></canvas>
+        </div>
+
+        <!-- Photo Mode Controls -->
+        <div id="photoControls" class="controls">
+          <button id="captureBtn" class="btn btn-capture">Capture Photo</button>
+          <button id="savePhotoBtn" class="btn btn-save" style="display: none">
+            Save Photo
+          </button>
+          <button
+            id="retakePhotoBtn"
+            class="btn btn-retry"
+            style="display: none"
+          >
+            Retake Photo
+          </button>
+        </div>
+
+        <!-- Video Mode Controls -->
+        <div id="videoControls" class="controls" style="display: none">
+          <button id="startBtn" class="btn btn-start">⏺ Start Recording</button>
           <button id="stopBtn" class="btn btn-stop" disabled>
             ⏹ Stop Recording
           </button>
-          <button id="saveBtn" class="btn btn-save" style="display: none">
-            Save & Upload
+          <button id="saveVideoBtn" class="btn btn-save" style="display: none">
+            Save Video
           </button>
-          <button id="retryBtn" class="btn btn-retry" style="display: none">
+          <button
+            id="retryVideoBtn"
+            class="btn btn-retry"
+            style="display: none"
+          >
             Record Again
           </button>
         </div>
 
         <div id="status" class="status"></div>
-        <div id="timer" class="timer">00:00</div>
+        <div id="timer" class="timer" style="display: none">00:00</div>
       </div>
     </div>
 
@@ -52,21 +83,43 @@
       let recordedBlob;
       let timerInterval;
       let seconds = 0;
+      let currentMode = "photo"; // 'photo' or 'video'
 
+      // Elements
       const preview = document.getElementById("preview");
       const recorded = document.getElementById("recorded");
+      const capturedPhoto = document.getElementById("capturedPhoto");
+      const photoCanvas = document.getElementById("photoCanvas");
+
+      // Mode buttons
+      const photoModeBtn = document.getElementById("photoModeBtn");
+      const videoModeBtn = document.getElementById("videoModeBtn");
+
+      // Photo controls
+      const captureBtn = document.getElementById("captureBtn");
+      const savePhotoBtn = document.getElementById("savePhotoBtn");
+      const retakePhotoBtn = document.getElementById("retakePhotoBtn");
+
+      // Video controls
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
-      const saveBtn = document.getElementById("saveBtn");
-      const retryBtn = document.getElementById("retryBtn");
+      const saveVideoBtn = document.getElementById("saveVideoBtn");
+      const retryVideoBtn = document.getElementById("retryVideoBtn");
+
+      // Common elements
       const status = document.getElementById("status");
       const timer = document.getElementById("timer");
+      const photoControls = document.getElementById("photoControls");
+      const videoControls = document.getElementById("videoControls");
 
       // Initialize camera
       async function initCamera() {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
+            video: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
             audio: true,
           });
           preview.srcObject = stream;
@@ -79,7 +132,141 @@
         }
       }
 
-      // Start recording
+      // Mode switching
+      photoModeBtn.addEventListener("click", () => {
+        switchToPhotoMode();
+      });
+
+      videoModeBtn.addEventListener("click", () => {
+        switchToVideoMode();
+      });
+
+      function switchToPhotoMode() {
+        currentMode = "photo";
+        photoModeBtn.classList.add("active");
+        videoModeBtn.classList.remove("active");
+        photoControls.style.display = "block";
+        videoControls.style.display = "none";
+        timer.style.display = "none";
+
+        // Reset view
+        preview.style.display = "block";
+        recorded.style.display = "none";
+        capturedPhoto.style.display = "none";
+
+        // Reset photo buttons
+        captureBtn.style.display = "inline-block";
+        savePhotoBtn.style.display = "none";
+        retakePhotoBtn.style.display = "none";
+
+        status.textContent = "Ready to capture photo";
+        status.className = "status";
+      }
+
+      function switchToVideoMode() {
+        currentMode = "video";
+        videoModeBtn.classList.add("active");
+        photoModeBtn.classList.remove("active");
+        videoControls.style.display = "block";
+        photoControls.style.display = "none";
+        timer.style.display = "block";
+        timer.textContent = "00:00";
+
+        // Reset view
+        preview.style.display = "block";
+        recorded.style.display = "none";
+        capturedPhoto.style.display = "none";
+
+        // Reset video buttons
+        startBtn.style.display = "inline-block";
+        stopBtn.style.display = "inline-block";
+        saveVideoBtn.style.display = "none";
+        retryVideoBtn.style.display = "none";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+
+        status.textContent = "Ready to record video";
+        status.className = "status";
+      }
+
+      // Photo capture functionality
+      captureBtn.addEventListener("click", () => {
+        const context = photoCanvas.getContext("2d");
+
+        // Set canvas size to match video
+        photoCanvas.width = preview.videoWidth;
+        photoCanvas.height = preview.videoHeight;
+
+        // Draw the current frame
+        context.drawImage(preview, 0, 0);
+
+        // Get image data
+        const imageDataUrl = photoCanvas.toDataURL("image/jpeg", 0.95);
+
+        // Display captured photo
+        capturedPhoto.src = imageDataUrl;
+        preview.style.display = "none";
+        capturedPhoto.style.display = "block";
+
+        // Update buttons
+        captureBtn.style.display = "none";
+        savePhotoBtn.style.display = "inline-block";
+        retakePhotoBtn.style.display = "inline-block";
+
+        status.textContent = "Photo captured!";
+        status.className = "status success";
+      });
+
+      // Save photo
+      savePhotoBtn.addEventListener("click", async () => {
+        status.textContent = "Uploading photo...";
+        status.className = "status";
+
+        const imageDataUrl = photoCanvas.toDataURL("image/jpeg", 0.95);
+
+        try {
+          const response = await fetch("/upload_photo", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              photo: imageDataUrl,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            status.textContent = "Photo saved! Redirecting...";
+            status.className = "status success";
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 1500);
+          } else {
+            status.textContent =
+              "Upload failed: " + (result.error || "Unknown error");
+            status.className = "status error";
+          }
+        } catch (err) {
+          status.textContent = "Upload error!";
+          status.className = "status error";
+          console.error("Upload error:", err);
+        }
+      });
+
+      // Retake photo
+      retakePhotoBtn.addEventListener("click", () => {
+        preview.style.display = "block";
+        capturedPhoto.style.display = "none";
+        captureBtn.style.display = "inline-block";
+        savePhotoBtn.style.display = "none";
+        retakePhotoBtn.style.display = "none";
+        status.textContent = "Ready to capture photo";
+        status.className = "status";
+      });
+
+      // Video recording functionality (existing code)
       startBtn.addEventListener("click", () => {
         recordedChunks = [];
 
@@ -105,8 +292,8 @@
           preview.style.display = "none";
           recorded.style.display = "block";
 
-          saveBtn.style.display = "inline-block";
-          retryBtn.style.display = "inline-block";
+          saveVideoBtn.style.display = "inline-block";
+          retryVideoBtn.style.display = "inline-block";
           stopBtn.style.display = "none";
           startBtn.style.display = "none";
 
@@ -140,9 +327,9 @@
         status.className = "status";
       });
 
-      // Save and upload
-      saveBtn.addEventListener("click", async () => {
-        status.textContent = "Uploading...";
+      // Save and upload video
+      saveVideoBtn.addEventListener("click", async () => {
+        status.textContent = "Uploading video...";
         status.className = "status";
 
         const reader = new FileReader();
@@ -185,12 +372,12 @@
         reader.readAsDataURL(recordedBlob);
       });
 
-      // Retry recording
-      retryBtn.addEventListener("click", () => {
+      // Retry video recording
+      retryVideoBtn.addEventListener("click", () => {
         preview.style.display = "block";
         recorded.style.display = "none";
-        saveBtn.style.display = "none";
-        retryBtn.style.display = "none";
+        saveVideoBtn.style.display = "none";
+        retryVideoBtn.style.display = "none";
         startBtn.style.display = "inline-block";
         stopBtn.style.display = "inline-block";
         stopBtn.disabled = true;
